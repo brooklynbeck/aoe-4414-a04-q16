@@ -1,79 +1,77 @@
-# ecef_to_sez.py
+# ecef_to_eci.py
 #
-# Usage: python3 ecef_to_sez.py o_x_km o_y_km o_z_km x_km y_km z_km
+# Usage: python3 ecef_to_eci.py year month day hour minute second ecef_x_km ecef_y_km ecef_z_km
 # Takes ecef coordinates and transforms them into sez coordinates
 # Parameters:
-# o_x_km : x coordinate of the ecef origin of the sez frame
-# o_y_km : y coordinate of the ecef origin of the sez frame
-# o_z_km : z coordinate of the ecef origin of the sez frame
-# x_km : x ecef coordinate of the satellite
-# y_km : y ecef coordinate of the satellite
-# z_km : z ecef coordinate of the satellite
+# year
+# month
+# day
+# hour
+# minute
+# second
+# ecef_x_km
+# ecef_y_km
+# ecef_z_km
 # Output:
-# Prints s, e, and z coordinates in km
+# Prints eci x, y, and z coordinates
 #
 # Written by Brooklyn Beck
 # Other contributors: None
-#
+# Updated with corrections
+
 # import Python modules
 import math # math module
 import sys # argv
 # "constants"
-R_E_KM = 6378.1363
-E_E = 0.081819221456
+W_E = 7.292115*10**(-5)
 
 # initialize script arguments
-o_x_km = float('nan') #x coordinate of the ecef origin of the sez frame
-o_y_km = float('nan') #y coordinate of the ecef origin of the sez frame
-o_z_km = float('nan') #z coordinate of the ecef origin of the sez frame
-x_km = float('nan') #x ecef coordinate of the satellite
-y_km = float('nan') #y ecef coordinate of the satellite
-z_km = float('nan') #z ecef coordinate of the satellite
+year = float('nan')
+month = float('nan')
+day = float('nan')
+hour = float('nan')
+minute = float('nan')
+second = float('nan')
+ecef_x_km = float('nan')
+ecef_y_km = float('nan')
+ecef_z_km = float('nan')
 
 # parse script arguments
-if len(sys.argv)==7:
-  o_x_km = float(sys.argv[1])
-  o_y_km = float(sys.argv[2])
-  o_z_km = float(sys.argv[3])
-  x_km = float(sys.argv[4])
-  y_km = float(sys.argv[5])
-  z_km = float(sys.argv[6])
+if len(sys.argv)==10:
+  year = float(sys.argv[1])
+  month = float(sys.argv[2])
+  day = float(sys.argv[3])
+  hour = float(sys.argv[4])
+  minute = float(sys.argv[5])
+  second = float(sys.argv[6])
+  ecef_x_km = float(sys.argv[7])
+  ecef_y_km = float(sys.argv[8])
+  ecef_z_km = float(sys.argv[9])
 else:
   print(\
   'Usage: '\
-  'python3 ecef_to_sez.py o_x_km o_y_km o_z_km x_km y_km z_km'\
+  'python3 ecef_to_eci.py year month day hour minute second ecef_x_km ecef_y_km ecef_z_km'\
   )
   exit()
 
 # main script
 
-#iteratively solve for latitude and longitude
-lon_rad = math.atan2(y_km,x_km)
-lon_deg = lon_rad*180.0/math.pi
-# initialize lat_rad, r_lon_km, z_km
-lat_rad = math.asin(z_km/math.sqrt(x_km**2+y_km**2+z_km**2))
-r_lon_km = math.sqrt(x_km**2+y_km**2)
-prev_lat_rad = float('nan')
-# iteratively find latitude
-c_E = float('nan')
-count = 0
-while (math.isnan(prev_lat_rad) or abs(lat_rad-prev_lat_rad)>10e-7) and count<5:
-  denom = math.sqrt(1.0-E_E**2*math.sin(lat_rad)**2)
-  c_E = R_E_KM/denom
-  prev_lat_rad = lat_rad
-  lat_rad = math.atan((z_km+c_E*(E_E**2)*math.sin(lat_rad))/r_lon_km)
-  count = count+1
+#calculate fractional julian date
+jd = day - 32075 + 1461*(year+4800-(14-month)//12)//4 + 367*(month-2+(14-month)//12*12)//12 - 3*((year+4900-(14-month)//12)//100)//4
+d_frac = (second + 60*(minute+60*hour))/86400
+jd_frac = jd-0.5 + d_frac
 
-#solve for x, y, and z vector components
-x_vec = o_x_km - x_km
-y_vec = o_y_km - y_km
-z_vec = o_z_km - z_km
+#calculate gmst angle
+t_ut1 = (jd_frac - 2451545.0)/36525
+gmst_sec = 67310.54841 + (876600*60*60+8640184.812866)*t_ut1 + 0.093104*t_ut1**2 - 6.2*10**(-6)*t_ut1**3
+gmst_rad = math.fmod(math.fmod(gmst_sec, 86400)*W_E+2*math.pi, 2*math.pi)
 
-#use rotation matrices to get s, e, and z coordinates
-s_km = x_vec*math.sin(lat_rad)*math.cos(lon_rad)+y_vec*math.sin(lat_rad)*math.sin(lon_rad)-z_vec*math.cos(lat_rad)
-e_km = y_vec*math.cos(lon_rad)-x_vec*math.sin(lon_rad)
-z_km = x_vec*math.cos(lat_rad)*math.cos(lon_rad)+y_vec*math.cos(lat_rad)*math.sin(lon_rad)+z_vec*math.sin(lat_rad)
+#calculate eci components
+eci_x_km = ecef_x_km*math.cos(-gmst_rad) + ecef_y_km*math.sin(-gmst_rad)
+eci_y_km = -ecef_x_km*math.sin(-gmst_rad) + ecef_y_km*math.cos(-gmst_rad)
+eci_z_km = ecef_z_km
 
-print(s_km)
-print(e_km)
-print(z_km)
+#print output
+print(eci_x_km)
+print(eci_y_km)
+print(eci_z_km)
